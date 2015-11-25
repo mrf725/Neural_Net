@@ -530,7 +530,7 @@ int main(int argc, char** argv){
 	Train();
 
 	duration = timerStop();
-	printf("Duration: %f seconds\n", ((duration)/1000));
+	printf("Duration: %f seconds\n", (duration));
 
 	Test();
 
