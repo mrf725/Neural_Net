@@ -103,11 +103,12 @@ void InitNeuralNet(void){
 
 	size = numInputNodes * neuronsPerLayer;
 
+	inputWeights = (float *) malloc(numInputNodes * neuronsPerLayer * sizeof(float));
+
 	/* allocate and initialize inputWeights*/
 	for(index = 0; index < size; index++)
 	{
-		inputWeights = (float *) malloc(numInputNodes * neuronsPerLayer * sizeof(float));
-
+		inputWeights[index] = ((-2)*((float)rand()/RAND_MAX)) + 1;
 	}
 
 
