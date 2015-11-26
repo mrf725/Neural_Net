@@ -37,6 +37,13 @@ float** hiddenNodeOutput;
 float**  outputWeights;
 float*   outputBias;
 
+/* weight from input to hidden layer
+ * i = output node (hidden layer)
+ * j = input node */
+float**  inputWeights;
+float numInputNodes;
+
+
 /* the output value at each output neuron */
 float* outputOutputs;
 int numOutputNodes;
@@ -89,6 +96,20 @@ void InitNeuralNet(void){
 
 	/* seed rand with time */
 	srand((unsigned) time(&t));
+
+	/* allocate and init input weights */
+	inputWeights = (float **) calloc(neuronsPerLayer, sizeof(float*));
+	for(node = 0; node < neuronsPerLayer; node++)
+	{
+		inputWeights[node] = (float *) calloc(numInputNodes, sizeof(float));
+		
+			for(inputNode = 0; inputNode < numInputNodes; inputNode++)
+			{
+				/* initialize weight between [-1, 1] */
+				inputWeights[node][inputNode] = ((-2)*((float)rand()/RAND_MAX)) + 1;
+
+			}
+	}
 
 	/* allocate and initialize hiddenWeights, hiddenNodeOutput,
      hiddenNodeBias */
@@ -187,9 +208,9 @@ void ForwardPropagation(int* input, float* output)
 	{
 		tempO = 0;
 
-		for(inNode = 0; inNode < neuronsPerLayer; inNode++)
+		for(inNode = 0; inNode < numInputNodes; inNode++)
 		{
-			tempO += input[inNode]*hiddenWeights[0][node][inNode];
+			tempO += input[inNode]*inputWeights[node][inNode];
 		}
 
 		hiddenNodeOutput[0][node] = Sigmoid(tempO + hiddenNodeBias[0][node]);
@@ -205,7 +226,7 @@ void ForwardPropagation(int* input, float* output)
 
 			for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 			{
-				tempO += hiddenNodeOutput[layer-1][inNode]*hiddenWeights[layer][node][inNode];
+				tempO += hiddenNodeOutput[layer-1][inNode]*hiddenWeights[layer-1][node][inNode];
 			}
 
 			hiddenNodeOutput[layer][node] = Sigmoid(tempO + hiddenNodeBias[layer][node]);
@@ -308,9 +329,9 @@ void UpdateNetwork (float **hiddenDelta,
 			/* update first layer */
 			if(layer == 0)
 			{
-				for(inNode = 0; inNode < neuronsPerLayer; inNode++)
+				for(inNode = 0; inNode < numInputNodes; inNode++)
 				{
-					hiddenWeights[layer][node][inNode] += learningRate * hiddenDelta[layer][node] * input[inNode];
+					inputWeights[node][inNode] += learningRate * hiddenDelta[layer][node] * input[inNode];
 
 /*					hiddenWeights[i][j][k] -= learningRate * hiddenDelta[i][k] * input[k]; */
 
@@ -323,7 +344,7 @@ void UpdateNetwork (float **hiddenDelta,
 			{
 				for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 				{
-					 hiddenWeights[layer][node][inNode] += learningRate * hiddenDelta[layer][node] * hiddenNodeOutput[layer-1][inNode];
+					 hiddenWeights[layer-1][node][inNode] += learningRate * hiddenDelta[layer][node] * hiddenNodeOutput[layer-1][inNode];
 					/* hiddenWeights[i][j][k] -= learningRate * hiddenDelta[i][k] * hiddenNodeOutput[i-1][k]; */
 
 				}
@@ -493,7 +514,7 @@ int main(int argc, char** argv){
 
 
 	/* read num inputs/outputs nodes */
-	neuronsPerLayer = atoi(argv[1]);
+	numInputNodes = atoi(argv[1]);
 
 	numOutputNodes = atoi(argv[2]);
 
@@ -504,25 +525,28 @@ int main(int argc, char** argv){
 	/* read the number of Hidden layers in net */
 	numHiddenLayers = atoi(argv[5]);
 
+	neuronsPerLayer = atoi(argv[6]);
+
 	/* read learning rate */
-	learningRate = atof(argv[6]);
+	learningRate = atof(argv[7]);
 
 	/* read testing data file */
-	testingFile = argv[7];
+	testingFile = argv[8];
 
 	/* read training data file */
-	trainingFile = argv[8];
+	trainingFile = argv[9];
 
 	/* read training target data  */
-	trainingTargetFile = argv[9];
+	trainingTargetFile = argv[10];
 
 	/* initialize the neural network */
 	InitNeuralNet();
 	InitSamples(numTrainingSamples, numTestSamples);
 
-	ReadFile(trainingFile, neuronsPerLayer, numTrainingSamples, trainingSamples);
+	ReadFile(trainingFile, numInputNodes, numTrainingSamples, trainingSamples);
 	ReadFile(trainingTargetFile, numOutputNodes, numTrainingSamples, trainingTargets);
-	ReadFile(testingFile, neuronsPerLayer, numTestSamples, testSamples);
+	ReadFile(testingFile, numInputNodes, numTestSamples, testSamples);
+
 
 	/* train the neural network */
 	timerStart();

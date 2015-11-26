@@ -47,6 +47,12 @@ float* hiddenNodeOutput;
 float*  outputWeights;
 float*  outputBias;
 
+/* weight from input to hidden layer
+ * i = output node (hidden layer)
+ * j = input node */
+float*  inputWeights;
+float numInputNodes;
+
 /* the output value at each output neuron */
 float* outputOutputs;
 int numOutputNodes;
@@ -105,12 +111,21 @@ void InitNeuralNet(void){
 
 	/* seed rand with time */
 	srand((unsigned) time(&t));
+	
+	size = numInputNodes * neuronsPerLayer;
 
-	size = numHiddenLayers * neuronsPerLayer * neuronsPerLayer;
+	/* allocate and initialize inputWeights*/
+	for(index = 0; index < size; index++)
+	{
+		inputWeights = (float *) malloc(numInputNodes * neuronsPerLayer * sizeof(float));
+
+	}
+
+	size = (numHiddenLayers - 1) * neuronsPerLayer * neuronsPerLayer;
 
 	/* allocate and initialize hiddenWeights, hiddenNodeOutput,
      hiddenNodeBias */
-	hiddenWeights = (float *) malloc(numHiddenLayers * neuronsPerLayer * neuronsPerLayer * sizeof(float));
+	hiddenWeights = (float *) malloc((numHiddenLayers - 1) * neuronsPerLayer * neuronsPerLayer * sizeof(float));
 	hiddenNodeOutput = (float *) malloc(numHiddenLayers * neuronsPerLayer * sizeof(float));
 	hiddenNodeBias = (float *) malloc(numHiddenLayers * neuronsPerLayer * sizeof(float));
 
@@ -166,9 +181,9 @@ void InitNeuralNet(void){
 
 void InitSamples(numTraining, numTest)
 {
-	trainingSamples = (int *) calloc(numTraining * neuronsPerLayer, sizeof(int));
+	trainingSamples = (int *) calloc(numTraining * numInputNodes, sizeof(int));
 	trainingTargets = (int *) calloc(numTraining * numOutputNodes, sizeof(int));
-	testSamples = (int *) calloc(numTest * neuronsPerLayer, sizeof(int));
+	testSamples = (int *) calloc(numTest * numInputNodes, sizeof(int));
 
 	return;
 }
@@ -197,7 +212,8 @@ void ForwardPropagation(int* input, float* output)
 #pragma omp parallel num_threads(threadCnt)\
 		default(none), private(threadRank, myStartNode, myEndNode, layer, node, inNode, tempO)\
 		shared(threadCnt, numHiddenLayers,  hiddenWeights, hiddenNodeOutput, hiddenNodeBias,\
-			   input, neuronsPerLayer, numOutputNodes, outputWeights, output, outputBias)
+			   input, neuronsPerLayer, numOutputNodes, outputWeights, output, outputBias,\
+			   inputWeights, numInputNodes)
 	{
 #ifdef _OPENMP
 		threadRank = omp_get_thread_num();
@@ -220,9 +236,9 @@ void ForwardPropagation(int* input, float* output)
 		{
 			tempO = 0;
 
-			for(inNode = 0; inNode < neuronsPerLayer; inNode++)
+			for(inNode = 0; inNode < numInputNodes; inNode++)
 			{
-				tempO += input[inNode]*hiddenWeights[getIndex3d(0, node, inNode, neuronsPerLayer, neuronsPerLayer)];
+				tempO += input[inNode]*inputWeights[getIndex2d(node, inNode, numInputNodes)];
 			}
 
 			hiddenNodeOutput[getIndex2d(0,node, neuronsPerLayer)] = Sigmoid(tempO +
@@ -243,7 +259,7 @@ void ForwardPropagation(int* input, float* output)
 				for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 				{
 					tempO += hiddenNodeOutput[getIndex2d(layer-1, inNode, neuronsPerLayer)]*
-							hiddenWeights[getIndex3d(layer, node, inNode, neuronsPerLayer, neuronsPerLayer)];
+							hiddenWeights[getIndex3d(layer-1, node, inNode, neuronsPerLayer, neuronsPerLayer)];
 				}
 
 
@@ -426,7 +442,7 @@ void UpdateNetwork (float *hiddenDelta,
 		default(none), private(threadRank, myStartNode, myEndNode, layer, node, inNode)\
 		shared(threadCnt, numHiddenLayers,  hiddenWeights, hiddenNodeOutput, hiddenNodeBias,\
 				input, learningRate, neuronsPerLayer, numOutputNodes, outputWeights, outputBias,\
-				hiddenDelta, outputDelta, outputOutputs)
+				hiddenDelta, outputDelta, outputOutputs, inputWeights, numInputNodes)
 	{
 #ifdef _OPENMP
 		threadRank = omp_get_thread_num();
@@ -449,15 +465,15 @@ void UpdateNetwork (float *hiddenDelta,
 /* threads need to sync for each layer */
 #pragma omp barrier
 
-			for(node = 0; node < neuronsPerLayer; node++)
+			for(node = myStartNode; node < myEndNode; node++)
 			{
 				/* update first layer */
 				if(layer == 0)
 				{
 					for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 					{
-						hiddenWeights[getIndex3d(layer, node, inNode, neuronsPerLayer, neuronsPerLayer)] +=
-								learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)] * input[inNode];
+						inputWeights[getIndex2d(node, inNode, numInputNodes)] +=
+													learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)] * input[inNode];
 
 						/*					hiddenWeights[i][j][k] -= learningRate * hiddenDelta[i][k] * input[k]; */
 
@@ -471,7 +487,7 @@ void UpdateNetwork (float *hiddenDelta,
 				{
 					for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 					{
-						hiddenWeights[getIndex3d(layer, node, inNode, neuronsPerLayer, neuronsPerLayer)] +=
+						hiddenWeights[getIndex3d(layer-1, node, inNode, neuronsPerLayer, neuronsPerLayer)] +=
 								learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)] *
 								hiddenNodeOutput[getIndex2d(layer-1, inNode, neuronsPerLayer)];
 						/* hiddenWeights[i][j][k] -= learningRate * hiddenDelta[i][k] * hiddenNodeOutput[i-1][k]; */
@@ -501,7 +517,7 @@ void UpdateNetwork (float *hiddenDelta,
 #pragma omp barrier
 
 		/* output layer */
-		for(node = 0; node < numOutputNodes; node++)
+		for(node = myStartNode; node < myEndNode; node++)
 		{
 
 			for(inNode = 0; inNode < neuronsPerLayer; inNode++)
@@ -556,10 +572,18 @@ void SyncLearning(void)
 
 
 	/* send weights and biases to everyone */
+	/* send/sum inputWeights to all p */
+	MPI_Allreduce(MPI_IN_PLACE,
+				&inputWeights[0],
+				(neuronsPerLayer * numInputNodes),
+				MPI_FLOAT,
+				MPI_SUM,
+				MPI_COMM_WORLD);
+
 	/* send/sum hiddenWeights to all p */
 	MPI_Allreduce(MPI_IN_PLACE,
 			&hiddenWeights[0],
-			(numHiddenLayers * neuronsPerLayer * neuronsPerLayer),
+			((numHiddenLayers-1) * neuronsPerLayer * neuronsPerLayer),
 			MPI_FLOAT,
 			MPI_SUM,
 			MPI_COMM_WORLD);
@@ -591,8 +615,13 @@ void SyncLearning(void)
 	/* average all weights and biases */
 	/* instead of doing individual loops for each assume hiddenNodeWeights
 	 * is the largest length, and check bounds */
-	for(i  = 0; i < (numHiddenLayers * neuronsPerLayer * neuronsPerLayer); i++)
+	for(i  = 0; i < ((numHiddenLayers-1) * neuronsPerLayer * neuronsPerLayer); i++)
 	{
+		if(i < (neuronsPerLayer * numInputNodes))
+		{
+			inputWeights[i] /= p;
+		}
+
 		if(i < (numOutputNodes))
 		{
 			outputBias[i] /= p;
@@ -649,7 +678,10 @@ void Train(void)
 	/*	printf("error %f\n", error);*/
 		if(error <= 0.01)
 		{
-			SyncLearning();
+			if(count % 1000 == 0)
+			{
+				SyncLearning();
+			}
 			count++;
 		}
 
@@ -796,7 +828,7 @@ int main(int argc, char** argv){
 
 
 	/* read num inputs/outputs nodes */
-	neuronsPerLayer = atoi(argv[1]);
+	numInputNodes = atoi(argv[1]);
 
 	numOutputNodes = atoi(argv[2]);
 
@@ -807,17 +839,19 @@ int main(int argc, char** argv){
 	/* read the number of Hidden layers in net */
 	numHiddenLayers = atoi(argv[5]);
 
+	neuronsPerLayer = atoi(argv[6]);
+
 	/* read learning rate */
-	learningRate = atof(argv[6]);
+	learningRate = atof(argv[7]);
 
 	/* read testing data file */
-	testingFile = argv[7];
+	testingFile = argv[8];
 
 	/* read training data file */
-	trainingFile = argv[8];
+	trainingFile = argv[9];
 
 	/* read training target data  */
-	trainingTargetFile = argv[9];
+	trainingTargetFile = argv[10];
 
 
 	// initializing MPI structures and checking p is odd
@@ -842,13 +876,13 @@ int main(int argc, char** argv){
 
 	if(myRank == 0)
 	{
-		ReadFile(trainingFile, neuronsPerLayer, numTrainingInputs, trainingSamples);
+		ReadFile(trainingFile, numInputNodes, numTrainingInputs, trainingSamples);
 		ReadFile(trainingTargetFile, numOutputNodes, numTrainingInputs, trainingTargets);
-		ReadFile(testingFile, neuronsPerLayer, numTestSamples, testSamples);
+		ReadFile(testingFile, numInputNodes, numTestSamples, testSamples);
 
 
 		/* send training sample */
-		SendInputs(trainingSamples, numTrainingInputs, neuronsPerLayer, p, TRAINING_SAMPLES);
+		SendInputs(trainingSamples, numTrainingInputs, numInputNodes, p, TRAINING_SAMPLES);
 
 		/* send training target outputs */
 		SendInputs(trainingTargets, numTrainingInputs, numOutputNodes, p, TRAINING_TARGETS);
@@ -858,14 +892,14 @@ int main(int argc, char** argv){
 	{
 		/* receive training samples */
 		MPI_Recv(&trainingSamples[0],
-				numTrainingSamples * neuronsPerLayer,
+				numTrainingSamples * numInputNodes,
 				MPI_INT,
 				0,
 				TRAINING_SAMPLES,
 				MPI_COMM_WORLD,
 				&status);
 
-		/* receive training samples */
+		/* receive training targets */
 		MPI_Recv(&trainingTargets[0],
 				numTrainingSamples * numOutputNodes,
 				MPI_INT,

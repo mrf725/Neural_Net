@@ -14,6 +14,7 @@
 #include "timer.h"
 #include <string.h>
 
+
 /* weights between neurons for each layer
    # Hidden Layers, # Neurons, #Neurons inputs from 
    previous layer
@@ -36,6 +37,12 @@ float* hiddenNodeOutput;
    j - jth input from last hidden layer */
 float*  outputWeights;
 float*  outputBias;
+
+/* weight from input to hidden layer
+ * i = output node (hidden layer)
+ * j = input node */
+float*  inputWeights;
+float numInputNodes;
 
 /* the output value at each output neuron */
 float* outputOutputs;
@@ -63,7 +70,7 @@ int ReadFile(char *file_name, int valuesPerLine, int numLines, int* arr){
 	}
 
 	i = 0;
-	while(!feof(ifp))
+	while((!feof(ifp)) && (i < (valuesPerLine*numLines)))
 	{
 		fscanf(ifp, "%d", &val);
 
@@ -94,11 +101,21 @@ void InitNeuralNet(void){
 	/* seed rand with time */
 	srand((unsigned) time(&t));
 
-	size = numHiddenLayers * neuronsPerLayer * neuronsPerLayer;
+	size = numInputNodes * neuronsPerLayer;
+
+	/* allocate and initialize inputWeights*/
+	for(index = 0; index < size; index++)
+	{
+		inputWeights = (float *) malloc(numInputNodes * neuronsPerLayer * sizeof(float));
+
+	}
+
+
+	size = (numHiddenLayers - 1) * neuronsPerLayer * neuronsPerLayer;
 
 	/* allocate and initialize hiddenWeights, hiddenNodeOutput,
      hiddenNodeBias */
-	hiddenWeights = (float *) malloc(numHiddenLayers * neuronsPerLayer * neuronsPerLayer * sizeof(float));
+	hiddenWeights = (float *) malloc((numHiddenLayers - 1) * neuronsPerLayer * neuronsPerLayer * sizeof(float));
 	hiddenNodeOutput = (float *) malloc(numHiddenLayers * neuronsPerLayer * sizeof(float));
 	hiddenNodeBias = (float *) malloc(numHiddenLayers * neuronsPerLayer * sizeof(float));
 
@@ -153,9 +170,9 @@ void InitNeuralNet(void){
 
 void InitSamples(numTraining, numTest)
 {
-	trainingSamples = (int *) calloc(numTraining * neuronsPerLayer, sizeof(int));
+	trainingSamples = (int *) calloc(numTraining * numInputNodes, sizeof(int));
 	trainingTargets = (int *) calloc(numTraining * numOutputNodes, sizeof(int));
-	testSamples = (int *) calloc(numTest * numOutputNodes, sizeof(int));
+	testSamples = (int *) calloc(numTest * numInputNodes, sizeof(int));
 
 	return;
 }
@@ -177,9 +194,9 @@ void ForwardPropagation(int* input, float* output)
 	{
 		tempO = 0;
 
-		for(inNode = 0; inNode < neuronsPerLayer; inNode++)
+		for(inNode = 0; inNode < numInputNodes; inNode++)
 		{
-			tempO += input[inNode]*hiddenWeights[getIndex3d(0, node, inNode, neuronsPerLayer, neuronsPerLayer)];
+			tempO += input[inNode]*inputWeights[getIndex2d(node, inNode, numInputNodes)];
 		}
 
 		hiddenNodeOutput[getIndex2d(0,node, neuronsPerLayer)] = Sigmoid(tempO +
@@ -197,7 +214,7 @@ void ForwardPropagation(int* input, float* output)
 			for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 			{
 				tempO += hiddenNodeOutput[getIndex2d(layer-1, inNode, neuronsPerLayer)]*
-						 hiddenWeights[getIndex3d(layer, node, inNode, neuronsPerLayer, neuronsPerLayer)];
+						 hiddenWeights[getIndex3d(layer-1, node, inNode, neuronsPerLayer, neuronsPerLayer)];
 			}
 
 
@@ -312,9 +329,9 @@ void UpdateNetwork (float *hiddenDelta,
 			/* update first layer */
 			if(layer == 0)
 			{
-				for(inNode = 0; inNode < neuronsPerLayer; inNode++)
+				for(inNode = 0; inNode < numInputNodes; inNode++)
 				{
-					hiddenWeights[getIndex3d(layer, node, inNode, neuronsPerLayer, neuronsPerLayer)] +=
+					inputWeights[getIndex2d(node, inNode, numInputNodes)] +=
 							learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)] * input[inNode];
 
 /*					hiddenWeights[i][j][k] -= learningRate * hiddenDelta[i][k] * input[k]; */
@@ -329,7 +346,7 @@ void UpdateNetwork (float *hiddenDelta,
 			{
 				for(inNode = 0; inNode < neuronsPerLayer; inNode++)
 				{
-					 hiddenWeights[getIndex3d(layer, node, inNode, neuronsPerLayer, neuronsPerLayer)] +=
+					 hiddenWeights[getIndex3d(layer-1, node, inNode, neuronsPerLayer, neuronsPerLayer)] +=
 							 learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)] *
 							 hiddenNodeOutput[getIndex2d(layer-1, inNode, neuronsPerLayer)];
 					/* hiddenWeights[i][j][k] -= learningRate * hiddenDelta[i][k] * hiddenNodeOutput[i-1][k]; */
@@ -405,17 +422,17 @@ void Train(void)
 	while(count < 5000)
 	{
 
-		Backpropagation(&trainingSamples[getIndex2d(i, 0 , neuronsPerLayer)],
+		Backpropagation(&trainingSamples[getIndex2d(i, 0 , numInputNodes)],
 				        &trainingTargets[getIndex2d(i, 0 , numOutputNodes)]);
 
-		ForwardPropagation(&trainingSamples[getIndex2d(i, 0 , neuronsPerLayer)], output);
+		ForwardPropagation(&trainingSamples[getIndex2d(i, 0 , numInputNodes)], output);
 
 		/* MSE */
 		error = 0;
 		for(j = 0; j < numOutputNodes; j++)
 		{
-			error += (trainingTargets[getIndex2d(i, j , neuronsPerLayer)] - output[j]) *
-					 (trainingTargets[getIndex2d(i, j , neuronsPerLayer)] - output[j]);
+			error += (trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]) *
+					 (trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]);
 		}
 		error = error / numOutputNodes;
 
@@ -492,7 +509,7 @@ int main(int argc, char** argv){
 	double duration = 0;
 
 	/* read num inputs/outputs nodes */
-	neuronsPerLayer = atoi(argv[1]);
+	numInputNodes = atoi(argv[1]);
 
 	numOutputNodes = atoi(argv[2]);
 
@@ -503,25 +520,27 @@ int main(int argc, char** argv){
 	/* read the number of Hidden layers in net */
 	numHiddenLayers = atoi(argv[5]);
 
+	neuronsPerLayer = atoi(argv[6]);
+
 	/* read learning rate */
-	learningRate = atof(argv[6]);
+	learningRate = atof(argv[7]);
 
 	/* read testing data file */
-	testingFile = argv[7];
+	testingFile = argv[8];
 
 	/* read training data file */
-	trainingFile = argv[8];
+	trainingFile = argv[9];
 
 	/* read training target data  */
-	trainingTargetFile = argv[9];
+	trainingTargetFile = argv[10];
 
 	/* initialize the neural network */
 	InitNeuralNet();
 	InitSamples(numTrainingSamples, numTestSamples);
 
-	ReadFile(trainingFile, neuronsPerLayer, numTrainingSamples, trainingSamples);
+	ReadFile(trainingFile, numInputNodes, numTrainingSamples, trainingSamples);
 	ReadFile(trainingTargetFile, numOutputNodes, numTrainingSamples, trainingTargets);
-	ReadFile(testingFile, neuronsPerLayer, numTestSamples, testSamples);
+	ReadFile(testingFile, numInputNodes, numTestSamples, testSamples);
 
 
 	/* train the neural network */
@@ -530,7 +549,7 @@ int main(int argc, char** argv){
 	Train();
 
 	duration = timerStop();
-	printf("Duration: %f seconds\n", ((duration)/1000));
+	printf("Duration: %f seconds\n", (duration));
 
 	Test();
 
