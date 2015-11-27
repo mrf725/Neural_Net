@@ -51,7 +51,7 @@ float*  outputBias;
  * i = output node (hidden layer)
  * j = input node */
 float*  inputWeights;
-float numInputNodes;
+int numInputNodes;
 
 /* the output value at each output neuron */
 float* outputOutputs;
@@ -114,10 +114,12 @@ void InitNeuralNet(void){
 	
 	size = numInputNodes * neuronsPerLayer;
 
+	inputWeights = (float *) malloc(numInputNodes * neuronsPerLayer * sizeof(float));
+
 	/* allocate and initialize inputWeights*/
 	for(index = 0; index < size; index++)
 	{
-		inputWeights = (float *) malloc(numInputNodes * neuronsPerLayer * sizeof(float));
+		inputWeights[index] = ((-2)*((float)rand()/RAND_MAX)) + 1;
 
 	}
 
@@ -659,10 +661,10 @@ void Train(void)
 
 	while(count < 5000)
 	{
-		Backpropagation(&trainingSamples[getIndex2d(i, 0 , neuronsPerLayer)],
+		Backpropagation(&trainingSamples[getIndex2d(i, 0 , numInputNodes)],
 				        &trainingTargets[getIndex2d(i, 0 , numOutputNodes)]);
 
-		ForwardPropagation(&trainingSamples[getIndex2d(i, 0 , neuronsPerLayer)], output);
+		ForwardPropagation(&trainingSamples[getIndex2d(i, 0 , numInputNodes)], output);
 
 		/* MSE */
 		error = 0;
