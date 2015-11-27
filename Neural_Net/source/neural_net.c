@@ -14,6 +14,7 @@
 #include <time.h>
 #include "timer.h"
 #include <string.h>
+#include "alphabet.h"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -177,6 +178,42 @@ void InitNeuralNet(void){
 
 	}
 
+	/* send all weights and bias from rank 0 */
+	/* input weights */
+	/*	MPI_Bcast(&inputWeights[0],
+			(neuronsPerLayer * numInputNodes),
+			MPI_FLOAT,
+			0,
+			MPI_COMM_WORLD);
+
+	/* send hiddenWeights to all p */
+	/*	MPI_Bcast(&hiddenWeights[0],
+			((numHiddenLayers-1) * neuronsPerLayer * neuronsPerLayer),
+			MPI_FLOAT,
+			0,
+			MPI_COMM_WORLD);
+
+
+	/* send hiddenNodeBias to all p */
+	/*	MPI_Bcast(&hiddenNodeBias[0],
+			(numHiddenLayers * neuronsPerLayer),
+			MPI_FLOAT,
+			0,
+			MPI_COMM_WORLD);
+
+	/* send outputWeights to all p */
+	/*	MPI_Bcast(&outputWeights[0],
+			(numOutputNodes * neuronsPerLayer),
+			MPI_FLOAT,
+			0,
+			MPI_COMM_WORLD);
+
+	/* send outputBias to all p */
+/*	MPI_Bcast(&outputBias[0],
+			(numOutputNodes),
+			MPI_FLOAT,
+			0,
+			MPI_COMM_WORLD); */
 
 	return;
 }
@@ -208,7 +245,10 @@ void ForwardPropagation(int* input, float* output)
 	int threadRank = 0;
 
 #ifdef _OPENMP
-	threadCnt = atoi((getenv("OMP_NUM_THREADS")));
+	if(getenv("OMP_NUM_THREADS") != 0)
+	{
+		threadCnt = atoi(getenv("OMP_NUM_THREADS"));
+	}
 #endif
 
 #pragma omp parallel num_threads(threadCnt)\
@@ -324,7 +364,10 @@ void CalcDelta (int *targetOutput,
 	int threadRank = 0;
 
 #ifdef _OPENMP
-	threadCnt = atoi((getenv("OMP_NUM_THREADS")));
+	if(getenv("OMP_NUM_THREADS") != 0)
+	{
+		threadCnt = atoi(getenv("OMP_NUM_THREADS"));
+	}
 #endif
 
 #pragma omp parallel num_threads(threadCnt)\
@@ -437,7 +480,10 @@ void UpdateNetwork (float *hiddenDelta,
 	int threadRank = 0;
 
 #ifdef _OPENMP
-	threadCnt = atoi((getenv("OMP_NUM_THREADS")));
+	if(getenv("OMP_NUM_THREADS") != 0)
+	{
+		threadCnt = atoi(getenv("OMP_NUM_THREADS"));
+	}
 #endif
 
 #pragma omp parallel num_threads(threadCnt)\
@@ -481,9 +527,6 @@ void UpdateNetwork (float *hiddenDelta,
 
 					}
 
-					/* update biases */
-					hiddenNodeBias[getIndex2d(layer, node, neuronsPerLayer)] +=
-							learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)];
 				}
 				else
 				{
@@ -496,6 +539,11 @@ void UpdateNetwork (float *hiddenDelta,
 
 					}
 				}
+
+
+				/* update biases */
+				hiddenNodeBias[getIndex2d(layer, node, neuronsPerLayer)] +=
+						learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)];
 
 			}
 		}
@@ -649,8 +697,20 @@ void SyncLearning(void)
 /* train the neural network using backpropagation */
 void Train(void)
 {
-	int  i, j, count;
+	int  i, j, count, syncRate = 100;
 	float *output, val = 0, error = 0, MSE = 0;
+	float targetMSE = 0.05;
+	int timeout = 5000;
+
+	if(getenv("TARGET_MSE") != 0)
+	{
+		targetMSE = atof(getenv("TARGET_MSE"));
+	}
+
+	if(getenv("SYNC_RATE") != 0)
+	{
+		syncRate = atoi(getenv("SYNC_RATE"));
+	}
 
 	/* allocate output */
 	output = (float *)calloc(numOutputNodes, sizeof(float));
@@ -671,20 +731,36 @@ void Train(void)
 
 		for(j = 0; j < numOutputNodes; j++)
 		{
-			error += (trainingTargets[getIndex2d(i, j , neuronsPerLayer)] - output[j]) *
-					 (trainingTargets[getIndex2d(i, j , neuronsPerLayer)] - output[j]);
+			error += (trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]) *
+					 (trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]);
 		}
 
 
 		error = error / numOutputNodes;
 	/*	printf("error %f\n", error);*/
-		if(error <= 0.01)
+		if(error <= targetMSE)
 		{
-			if(count % 1000 == 0)
+			timeout = 5000;
+
+			if(count % 200 == 0)
 			{
+				learningRate /= 1.5;
+			}
+
+			if(count%syncRate == 0)
+			{
+				/* printf("Sync\n"); */
 				SyncLearning();
 			}
+
 			count++;
+		}
+
+		timeout--;
+
+		if(timeout == 0)
+		{
+			break;
 		}
 
 		/* update training sample used */
@@ -719,10 +795,48 @@ void printOutput(int *value, int length, int cols)
 
 }
 
+void calcProbabilities(float * probs, int  * out)
+{
+	int i = 0, j = 0, numCorrect = 0;
+
+	for(i = 0; i < NUM_CHARS; i++)
+	{
+		numCorrect = 0;
+		for(j = 0; j < numOutputNodes; j++)
+		{
+			if(out[j] == ALPHABET_MAPPING[i][j])
+			{
+				numCorrect++;
+			}
+		}
+		probs[i] = (float)numCorrect/numOutputNodes;
+	}
+
+	return;
+}
+char predict(float * in)
+{
+	int i = 0, maxIdx = 0;
+	float max = 0;
+
+	for(i = 0; i < NUM_CHARS; i++ )
+	{
+		if(in[i] > max)
+		{
+			max = in[i];
+			maxIdx = i;
+		}
+	}
+
+	return (maxIdx);
+}
 void Test(void)
 {
 	int i, j, * intOutput;
 	float *output;
+	float probabilities[NUM_CHARS];
+	float accuracy = 0;
+	char pred = 0;
 
 	/* allocate output */
 	output = (float *)calloc(numOutputNodes, sizeof(float));
@@ -731,6 +845,7 @@ void Test(void)
 	for(i = 0; i < numTestSamples; i++)
 	{
 		ForwardPropagation(&testSamples[i*neuronsPerLayer], output);
+
 
 		/* convert float output to integer, threshold = 0.5 since using round */
 		for(j = 0; j < numOutputNodes; j++)
@@ -745,8 +860,22 @@ void Test(void)
 			}
 		}
 
+
+		calcProbabilities(probabilities, intOutput);
+		pred = predict(probabilities);
+
+		printf("Predicted Character: %c\n", pred+65);
+
+		/* assumes inputs are in abc order for easy calculation */
+		if(pred == i)
+		{
+			accuracy++;
+		}
 		printOutput(intOutput, numOutputNodes, 5);
 	}
+
+	accuracy /= numTestSamples;
+	printf("Prediction Accuracy: %f\n", accuracy);
 
 	free(intOutput);
 	free(output);
@@ -785,7 +914,7 @@ void SendInputs(int *input, int trainingInputsCnt, int sendCnt, int worldSize, i
 
 
 		/* send training sources */
-		MPI_Isend(&trainingSamples[i],
+		MPI_Isend(&input[i],
 				sendCnt*numToSend,
 				MPI_INT,
 				dest,
@@ -882,19 +1011,19 @@ int main(int argc, char** argv){
 		ReadFile(trainingTargetFile, numOutputNodes, numTrainingInputs, trainingTargets);
 		ReadFile(testingFile, numInputNodes, numTestSamples, testSamples);
 
-
 		/* send training sample */
-		SendInputs(trainingSamples, numTrainingInputs, numInputNodes, p, TRAINING_SAMPLES);
+		SendInputs(&trainingSamples[0], numTrainingInputs, numInputNodes, p, TRAINING_SAMPLES);
 
 		/* send training target outputs */
-		SendInputs(trainingTargets, numTrainingInputs, numOutputNodes, p, TRAINING_TARGETS);
+		SendInputs(&trainingTargets[0], numTrainingInputs, numOutputNodes, p, TRAINING_TARGETS);
+
 
 	}
 	else
 	{
 		/* receive training samples */
 		MPI_Recv(&trainingSamples[0],
-				numTrainingSamples * numInputNodes,
+				(numTrainingSamples * numInputNodes),
 				MPI_INT,
 				0,
 				TRAINING_SAMPLES,
@@ -903,7 +1032,7 @@ int main(int argc, char** argv){
 
 		/* receive training targets */
 		MPI_Recv(&trainingTargets[0],
-				numTrainingSamples * numOutputNodes,
+				(numTrainingSamples * numOutputNodes),
 				MPI_INT,
 				0,
 				TRAINING_TARGETS,

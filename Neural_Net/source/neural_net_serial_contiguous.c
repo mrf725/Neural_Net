@@ -13,7 +13,7 @@
 #include <time.h>
 #include "timer.h"
 #include <string.h>
-
+#include "alphabet.h"
 
 /* weights between neurons for each layer
    # Hidden Layers, # Neurons, #Neurons inputs from 
@@ -42,7 +42,7 @@ float*  outputBias;
  * i = output node (hidden layer)
  * j = input node */
 float*  inputWeights;
-float numInputNodes;
+int numInputNodes;
 
 /* the output value at each output neuron */
 float* outputOutputs;
@@ -227,6 +227,7 @@ void ForwardPropagation(int* input, float* output)
 	}
 
 	layer = numHiddenLayers-1;
+
 	/* propagate through output weights */
 	for(node = 0; node < numOutputNodes; node++)
 	{
@@ -339,9 +340,6 @@ void UpdateNetwork (float *hiddenDelta,
 
 				}
 
-				/* update biases */
-				hiddenNodeBias[getIndex2d(layer, node, neuronsPerLayer)] +=
-						learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)];
 			}
 			else
 			{
@@ -354,6 +352,10 @@ void UpdateNetwork (float *hiddenDelta,
 
 				}
 			}
+
+			/* update biases */
+							hiddenNodeBias[getIndex2d(layer, node, neuronsPerLayer)] +=
+									learningRate * hiddenDelta[getIndex2d(layer, node, neuronsPerLayer)];
 
 		}
 	}
@@ -410,8 +412,20 @@ void Backpropagation (int* input, int* targetOutput)
 /* train the neural network using backpropagation */
 void Train(void)
 {
-	int  i, j, count;
+	int  i, j, count, syncRate = 100;;
 	float *output,  error = 0, MSE = 0;
+	float targetMSE = 0.01;
+	int timeout = 5000;
+
+	if(getenv("TARGET_MSE") != 0)
+	{
+		targetMSE = atof(getenv("TARGET_MSE"));
+	}
+
+	if(getenv("SYNC_RATE") != 0)
+	{
+		syncRate = atoi(getenv("SYNC_RATE"));
+	}
 
 	/* allocate output */
 	output = (float *)calloc(numOutputNodes, sizeof(float));
@@ -438,14 +452,29 @@ void Train(void)
 		error = error / numOutputNodes;
 
 
-		if(error <= 0.001)
+		if(error <= targetMSE)
 		{
+			timeout = 5000;
+
+			if(count % 200 == 0)
+			{
+				learningRate /= 1.5;
+			}
 			count++;
+		}
+
+		timeout--;
+
+		if(timeout == 0)
+		{
+			break;
 		}
 
 		/* update training sample used */
 		i = rand()%numTrainingSamples;
 	}
+
+	free(output);
 }
 
 void printOutput(int *value, int length, int cols)
@@ -471,11 +500,48 @@ void printOutput(int *value, int length, int cols)
 	printf("\n\n");
 
 }
+void calcProbabilities(float * probs, int  * out)
+{
+	int i = 0, j = 0, numCorrect = 0;
 
+	for(i = 0; i < NUM_CHARS; i++)
+	{
+		numCorrect = 0;
+		for(j = 0; j < numOutputNodes; j++)
+		{
+			if(out[j] == ALPHABET_MAPPING[i][j])
+			{
+				numCorrect++;
+			}
+		}
+		probs[i] = (float)numCorrect/numOutputNodes;
+	}
+
+	return;
+}
+char predict(float * in)
+{
+	int i = 0, maxIdx = 0;
+	float max = 0;
+
+	for(i = 0; i < NUM_CHARS; i++ )
+	{
+		if(in[i] > max)
+		{
+			max = in[i];
+			maxIdx = i;
+		}
+	}
+
+	return (maxIdx);
+}
 void Test(void)
 {
 	int i, j, * intOutput;
 	float *output;
+	float probabilities[NUM_CHARS];
+	float accuracy = 0;
+	char pred = 0;
 
 	/* allocate output */
 	output = (float *)calloc(neuronsPerLayer, sizeof(float));
@@ -483,8 +549,10 @@ void Test(void)
 
 	for(i = 0; i < numTestSamples; i++)
 	{
-		ForwardPropagation(&testSamples[i*neuronsPerLayer], output);
 
+		ForwardPropagation(&testSamples[i*numInputNodes], output);
+
+		/* convert float output to integer, threshold = 0.5 since using round */
 		/* convert float output to integer, threshold = 0.5 since using round */
 		for(j = 0; j < numOutputNodes; j++)
 		{
@@ -498,8 +566,42 @@ void Test(void)
 			}
 		}
 
+
+		calcProbabilities(probabilities, intOutput);
+		pred = predict(probabilities);
+
+		printf("Predicted Character: %c\n", pred+65);
+
+		/* assumes inputs are in abc order for easy calculation */
+		if(pred == i)
+		{
+			accuracy++;
+		}
 		printOutput(intOutput, numOutputNodes, 5);
 	}
+
+	accuracy /= numTestSamples;
+	printf("Prediction Accuracy: %f\n", accuracy);
+
+	free(intOutput);
+	free(output);
+
+	return;
+}
+
+void cleanUp(void)
+{
+	free(hiddenWeights);
+	free(hiddenNodeBias);
+	free(hiddenNodeOutput);
+
+	free(outputWeights);
+	free(outputBias);
+	free(outputOutputs);
+
+	free(trainingSamples);
+	free(trainingTargets);
+	free(testSamples);
 
 	return;
 }
@@ -553,6 +655,8 @@ int main(int argc, char** argv){
 	printf("Duration: %f seconds\n", (duration));
 
 	Test();
+
+	cleanUp();
 
 	return 0;
 }
