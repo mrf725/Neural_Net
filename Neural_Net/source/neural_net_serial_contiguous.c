@@ -56,6 +56,7 @@ int* trainingSamples;
 int* trainingTargets;
 int* testSamples;
 int numTrainingSamples, numTestSamples;
+int verbose;
 
 
 // Reads training or test data from a text file
@@ -577,7 +578,11 @@ void Test(void)
 		{
 			accuracy++;
 		}
-		printOutput(intOutput, numOutputNodes, 5);
+
+		if(verbose)
+		{
+			printOutput(intOutput, numOutputNodes, 5);
+		}
 	}
 
 	accuracy /= numTestSamples;
@@ -610,6 +615,13 @@ void cleanUp(void)
 int main(int argc, char** argv){
 	char* trainingFile, * trainingTargetFile, * testingFile;
 	double duration = 0;
+
+	verbose = 0;
+
+	if(getenv("VERBOSE") != 0)
+	{
+		verbose = atoi(getenv("VERBOSE"));
+	}
 
 	/* read num inputs/outputs nodes */
 	numInputNodes = atoi(argv[1]);

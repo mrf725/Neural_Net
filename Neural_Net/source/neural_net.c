@@ -24,6 +24,9 @@
 #define TRAINING_SAMPLES 8
 #define TRAINING_TARGETS 9
 
+#define ERR_EPOCH 5000
+#define ANNEALING_RATE 200
+
 
 /* weights between neurons for each layer
    # Hidden Layers, # Neurons, #Neurons inputs from
@@ -68,6 +71,7 @@ int* testSamples;
 int numTrainingSamples, numTestSamples;
 
 int myRank;// Rank of process
+int verbose;
 
 // Reads training or test data from a text file
 int ReadFile(char *file_name, int valuesPerLine, int numLines, int* arr){
@@ -611,15 +615,23 @@ void Backpropagation (int* input, int* targetOutput)
 	return;
 }
 
-void SyncLearning(void)
+int SyncLearning(int *failures, int syncRate)
 {
 	int  i, p, size;
+	static int stop = 0;
 
 	MPI_Comm_size(MPI_COMM_WORLD, &p);
 
 	/* send weight from everyone to everyone else */
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	/* sum failures if other processors failed to achieve MSE */
+	MPI_Allreduce(MPI_IN_PLACE,
+			(void*) failures,
+			1,
+			MPI_INT,
+			MPI_SUM,
+			MPI_COMM_WORLD);
 
 	/* send weights and biases to everyone */
 	/* send/sum inputWeights to all p */
@@ -690,8 +702,18 @@ void SyncLearning(void)
 		hiddenWeights[i] /= p;
 	}
 
+	if(verbose)
+	{
+		printf("rank:%d failure %d stop %d\n", myRank, *failures, stop);
+	}
+	if((*failures))
+	{
+		/* set flag back to one */
+		(*failures) = 1;
+		stop++;
+	}
 
-	return;
+	return (stop >= ((ERR_EPOCH/syncRate)-1));
 }
 
 /* train the neural network using backpropagation */
@@ -700,7 +722,7 @@ void Train(void)
 	int  i, j, count, syncRate = 100;
 	float *output, val = 0, error = 0, MSE = 0;
 	float targetMSE = 0.05;
-	int timeout = 5000;
+	int timeout = ERR_EPOCH, failedToAchieveMSE = 0, done = 0;
 
 	if(getenv("TARGET_MSE") != 0)
 	{
@@ -719,7 +741,7 @@ void Train(void)
 	count = 0;
 	i = rand()%numTrainingSamples;
 
-	while(count < 5000)
+	while(count < ERR_EPOCH)
 	{
 		Backpropagation(&trainingSamples[getIndex2d(i, 0 , numInputNodes)],
 				        &trainingTargets[getIndex2d(i, 0 , numOutputNodes)]);
@@ -732,25 +754,29 @@ void Train(void)
 		for(j = 0; j < numOutputNodes; j++)
 		{
 			error += (trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]) *
-					 (trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]);
+					(trainingTargets[getIndex2d(i, j , numOutputNodes)] - output[j]);
 		}
 
 
 		error = error / numOutputNodes;
-	/*	printf("error %f\n", error);*/
+		/*	printf("error %f\n", error);*/
 		if(error <= targetMSE)
 		{
-			timeout = 5000;
+			timeout = ERR_EPOCH;
 
-			if(count % 200 == 0)
+			if(count % ANNEALING_RATE == 0)
 			{
 				learningRate /= 1.5;
 			}
 
 			if(count%syncRate == 0)
 			{
-				/* printf("Sync\n"); */
-				SyncLearning();
+				if(verbose)
+				{
+					printf("Sync\n");
+				}
+
+				done = SyncLearning(&failedToAchieveMSE, syncRate);
 			}
 
 			count++;
@@ -760,11 +786,27 @@ void Train(void)
 
 		if(timeout == 0)
 		{
-			break;
+			timeout = ERR_EPOCH;
+
+			failedToAchieveMSE++;
+
+			if(verbose)
+			{
+				printf("rank:%d timeout %d\n", myRank, failedToAchieveMSE);
+			}
+
+
+			done = SyncLearning(&failedToAchieveMSE, syncRate);
+
 		}
 
 		/* update training sample used */
 		i = rand()%numTrainingSamples;
+
+		if(done)
+		{
+			break;
+		}
 	}
 
 	free(output);
@@ -864,14 +906,17 @@ void Test(void)
 		calcProbabilities(probabilities, intOutput);
 		pred = predict(probabilities);
 
-		printf("Predicted Character: %c\n", pred+65);
-
 		/* assumes inputs are in abc order for easy calculation */
 		if(pred == i)
 		{
 			accuracy++;
 		}
-		printOutput(intOutput, numOutputNodes, 5);
+
+		if(verbose)
+		{
+			printf("Predicted Character: %c\n", pred+65);
+			printOutput(intOutput, numOutputNodes, 5);
+		}
 	}
 
 	accuracy /= numTestSamples;
@@ -956,6 +1001,13 @@ int main(int argc, char** argv){
 	MPI_Request request;
 	char* trainingFile, * trainingTargetFile, * testingFile;
 	double start, end;
+
+	verbose = 0;
+
+	if(getenv("VERBOSE") != 0)
+	{
+		verbose = atoi(getenv("VERBOSE"));
+	}
 
 
 	/* read num inputs/outputs nodes */
