@@ -1,0 +1,251 @@
+#!/bin/bash
+#SBATCH -J neural_net        # Job Name
+#SBATCH -o neural_net_results.o%j    # Output and error file name (%j expands to jobID)
+#SBATCH -n 8              # Total number of mpi tasks requested
+#SBATCH -p normal          # Queue (partition) name -- normal, development, etc.
+#SBATCH -t 05:00:00        # Run time (hh:mm:ss) - 5 minutes
+#SBATCH -A TG-CCR150026
+
+
+echo Starting Serial
+echo
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+./neural_net_serial_contiguous 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+
+echo
+echo
+echo
+
+#SBATCH -n 2              # Total number of mpi tasks requested
+echo Starting Parallel: Data
+echo NP = 2
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+echo
+echo
+
+#SBATCH -n 4              # Total number of mpi tasks requested
+echo NP = 4
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+echo
+echo
+
+#SBATCH -n 8              # Total number of mpi tasks requested
+echo NP = 8
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+echo
+echo
+echo
+
+#SBATCH -n 1              # Total number of mpi tasks requested
+echo Starting Parallel: Node
+echo Threads = 2
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+export OMP_NUM_THREADS=2
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=2
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+export OMP_NUM_THREADS=2
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+echo
+echo
+
+echo Threads = 4
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+export OMP_NUM_THREADS=4
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=4
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+export OMP_NUM_THREADS=4
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+echo
+echo
+
+echo Threads = 8
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+export OMP_NUM_THREADS=8
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.05
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=8
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Target MSE = 0.01
+export TARGET_MSE=0.01
+export OMP_NUM_THREADS=8
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 1 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+
+echo
+echo
+echo
+
+#SBATCH -n 2              # Total number of mpi tasks requested
+echo Sync Rate
+echo Sync = 100
+echo NP = 2
+echo Target MSE = 0.1
+export OMP_NUM_THREADS=1
+export TARGET_MSE=0.1
+export SYNC_RATE=100
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Sync = 500
+echo NP = 2
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+export SYNC_RATE=500
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+echo Sync = 1000
+echo NP = 2
+echo Target MSE = 0.1
+export TARGET_MSE=0.1
+export SYNC_RATE=1000
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
+
+echo
+echo
+echo
+
+echo Parallel: Data and Node
+
+#SBATCH -n 2              # Total number of mpi tasks requested
+echo Target MSE = 0.05
+echo NP = 2
+echo Threads = 2
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=2
+export SYNC_RATE=100
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+#SBATCH -n 4              # Total number of mpi tasks requested
+echo NP = 4
+echo Threads = 4
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=4
+ibrun -np 4 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+#SBATCH -n 8              # Total number of mpi tasks requested
+echo NP = 8
+echo Threads = 8
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=8
+ibrun -np 8 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+echo
+#SBATCH -n 2              # Total number of mpi tasks requested
+echo NP = 2
+echo Threads = 4
+export TARGET_MSE=0.05
+export OMP_NUM_THREADS=4
+ibrun -np 2 ./neural_net 400 25 104 26 2 400 .5 Testing.txt Training.txt Targets.txt
+
